@@ -41,6 +41,7 @@ import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.ChildSafePasswordGate;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
@@ -165,12 +166,7 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
     private final int folderId;
     int animateFromCount = 0;
 
-    //CHILDSAFE OPTIONS
-    private static final String CHILD_PREFS = "childsafe_prefs";
-    private static final String KEY_SEARCH_UNLOCKED_UNTIL = "search_unlocked_until";
-    private static final long UNLOCK_DURATION_MS = 3 * 60 * 1000L; // 3 минуты
-    private boolean searchPasswordDialogShown = false;
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    //CHILDSAFE OPTIONS moved to ChildSafePasswordGate
 
     public SearchViewPager(Context context, DialogsActivity fragment, int type, int initialDialogsType, int folderId, ChatPreviewDelegate chatPreviewDelegate) {
         super(context);
@@ -707,58 +703,10 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
                 }
             };
 
-            // Если уже разблокировано — делаем сразу
-            if (isSearchUnlocked(ctx)) {
-                doSearchAndRecs.run();
-            } else {
-                // Если диалог уже показывается — просто игнорируем новый запрос (или можно показать toast)
-                if (searchPasswordDialogShown) {
-                    // опционально: дать фидбек
-                    // Toast.makeText(ctx, "Требуется пароль", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                searchPasswordDialogShown = true;
-
-                final EditText input = new EditText(ctx);
-                input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-                input.setHint("Пароль");
-
-                android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(ctx);
-                builder.setTitle("Требуется пароль")
-                        .setMessage("Введите пароль, чтобы выполнить поиск и просмотреть рекомендации")
-                        .setView(input)
-                        .setCancelable(false)
-                        .setPositiveButton("ОК", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                searchPasswordDialogShown = false;
-                                String entered = input.getText() != null ? input.getText().toString() : "";
-                                if (checkPassword(entered)) {
-                                    // Успех — ставим таймер и выполняем запросы
-                                    unlockSearchFor(ctx, UNLOCK_DURATION_MS);
-                                    // Выполняем на UI-потоке
-                                    mainHandler.post(doSearchAndRecs);
-                                } else {
-                                    // Неверный пароль — фидбек
-                                    Toast.makeText(ctx, "Неверный пароль", Toast.LENGTH_SHORT).show();
-                                }
-                            }
-                        })
-                        .setNegativeButton("Отмена", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                searchPasswordDialogShown = false;
-                                // ничего не делаем
-                            }
-                        });
-                try {
-                    android.app.AlertDialog dlg = builder.create();
-                    dlg.show();
-                } catch (Exception e) {
-                    // на всякий случай: сбросим флаг и выполним молча (или ничего)
-                    searchPasswordDialogShown = false;
-                }
+            if (ChildSafePasswordGate.requestSearchApprovalIfNeeded(ctx, doSearchAndRecs)) {
+                return;
             }
+            doSearchAndRecs.run();
         } else if (view == botsSearchContainer) {
             botsSearchAdapter.search(query);
             botsEmptyView.setKeyboardHeight(keyboardSize, false);
@@ -834,30 +782,6 @@ public class SearchViewPager extends ViewPagerFixed implements FilteredSearchVie
             ((SearchDownloadsContainer) view).search(query);
         }
     }
-
-    private boolean isSearchUnlocked(Context ctx) {
-        try {
-            SharedPreferences prefs = ctx.getSharedPreferences(CHILD_PREFS, Context.MODE_PRIVATE);
-            long until = prefs.getLong(KEY_SEARCH_UNLOCKED_UNTIL, 0L);
-            return System.currentTimeMillis() <= until;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private void unlockSearchFor(Context ctx, long durationMs) {
-        SharedPreferences prefs = ctx.getSharedPreferences(CHILD_PREFS, Context.MODE_PRIVATE);
-        long until = System.currentTimeMillis() + durationMs;
-        prefs.edit().putLong(KEY_SEARCH_UNLOCKED_UNTIL, until).apply();
-    }
-
-    /**
-     * Проверка пароля: сначала из prefs (runtime), иначе из BuildConfig (если задано).
-     */
-    private boolean checkPassword(String entered) {
-        return entered != null && entered.equals(BuildConfig.SEARCH_PASSWORD);
-    }
-
 
     @Nullable
     public SearchDownloadsContainer getDownloadsContainer() {

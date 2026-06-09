@@ -26,6 +26,7 @@ import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.ChildSafePasswordGate;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.ImageLocation;
@@ -197,6 +198,9 @@ public class JoinGroupAlert extends BottomSheet {
             requestTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
             requestTextView.setTypeface(AndroidUtilities.bold());
             requestTextView.setOnClickListener((view) -> {
+                if (ChildSafePasswordGate.requestJoinApprovalIfNeeded(getContext(), () -> requestTextView.performClick())) {
+                    return;
+                }
                 AndroidUtilities.runOnUIThread(() -> {
                     if (!isDismissed()) {
                         requestTextView.setVisibility(View.INVISIBLE);
@@ -314,6 +318,9 @@ public class JoinGroupAlert extends BottomSheet {
             joinTextView.setTypeface(AndroidUtilities.bold());
             linearLayout.addView(joinTextView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, Gravity.START, 14, 0, 14, 14));
             joinTextView.setOnClickListener(v -> {
+                if (ChildSafePasswordGate.requestJoinApprovalIfNeeded(getContext(), () -> joinTextView.performClick())) {
+                    return;
+                }
                 dismiss();
                 final TLRPC.TL_messages_importChatInvite req = new TLRPC.TL_messages_importChatInvite();
                 req.hash = hash;

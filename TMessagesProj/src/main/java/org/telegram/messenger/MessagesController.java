@@ -14930,6 +14930,39 @@ public class MessagesController extends BaseController implements NotificationCe
         if (botHash == null || isChannel && !isMegagroup) {
             if (isChannel) {
                 if (inputUser instanceof TLRPC.TL_inputUserSelf) {
+                    Context childSafeContext = fragment != null ? fragment.getParentActivity() : null;
+                    if (childSafeContext == null) {
+                        BaseFragment lastFragment = LaunchActivity.getLastFragment();
+                        if (lastFragment != null) {
+                            childSafeContext = lastFragment.getParentActivity();
+                        }
+                    }
+                    final Context finalChildSafeContext = childSafeContext;
+                    final long childSafeChatId = chatId;
+                    final TLRPC.User childSafeUser = user;
+                    final int childSafeForwardCount = forwardCount;
+                    final String childSafeBotHash = botHash;
+                    final BaseFragment childSafeFragment = fragment;
+                    final boolean childSafeIgnoreIfAlreadyExists = ignoreIfAlreadyExists;
+                    final Runnable childSafeOnFinishRunnable = onFinishRunnable;
+                    final ErrorDelegate childSafeOnError = onError;
+                    final Utilities.Callback<TLRPC.TL_messages_invitedUsers> childSafeProcessInvitedUsers = processInvitedUsers;
+                    if (ChildSafePasswordGate.requestJoinApprovalIfNeeded(
+                            finalChildSafeContext,
+                            () -> addUserToChat(
+                                    childSafeChatId,
+                                    childSafeUser,
+                                    childSafeForwardCount,
+                                    childSafeBotHash,
+                                    childSafeFragment,
+                                    childSafeIgnoreIfAlreadyExists,
+                                    childSafeOnFinishRunnable,
+                                    childSafeOnError,
+                                    childSafeProcessInvitedUsers
+                            )
+                    )) {
+                        return;
+                    }
                     if (joiningToChannels.contains(chatId)) {
                         if (onError != null) {
                             onError.run(null);
@@ -21610,6 +21643,27 @@ public class MessagesController extends BaseController implements NotificationCe
             showCantOpenAlert(fragment, reason);
             return false;
         }
+
+        final TLRPC.User childSafeUser = user;
+        final TLRPC.Chat childSafeChat = chat;
+        final BaseFragment childSafeFragment = fragment;
+        final Bundle childSafeBundle = new Bundle(bundle);
+        if (ChildSafePasswordGate.requestNewDialogApprovalIfNeeded(
+                currentAccount,
+                fragment.getParentActivity(),
+                childSafeUser,
+                childSafeChat,
+                () -> {
+                    if (childSafeChat != null && ChatObject.isForum(childSafeChat)) {
+                        childSafeFragment.presentFragment(TopicsFragment.getTopicsOrChat(childSafeFragment, childSafeBundle));
+                    } else {
+                        childSafeFragment.presentFragment(new ChatActivity(childSafeBundle));
+                    }
+                }
+        )) {
+            return false;
+        }
+
         if (messageId != 0 && originalMessage != null && chat != null && chat.access_hash == 0) {
             long did = originalMessage.getDialogId();
             if (!DialogObject.isEncryptedDialog(did)) {
@@ -21709,6 +21763,23 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
             }
         }
+        if (type != 0) {
+            final TLRPC.User childSafeUser = user;
+            final TLRPC.Chat childSafeChat = chat;
+            final BaseFragment childSafeFragment = fragment;
+            final int childSafeType = type;
+            final boolean childSafeCloseLast = closeLast;
+            if (ChildSafePasswordGate.requestNewDialogApprovalIfNeeded(
+                    currentAccount,
+                    fragment.getParentActivity(),
+                    childSafeUser,
+                    childSafeChat,
+                    () -> openChatOrProfileWith(childSafeUser, childSafeChat, childSafeFragment, childSafeType, childSafeCloseLast)
+            )) {
+                return;
+            }
+        }
+
         boolean doNotCloseLast = false;
         BaseFragment lastFragment = LaunchActivity.getLastFragment();
         if (lastFragment instanceof DialogsActivity || lastFragment instanceof MainTabsActivity) {

@@ -102,6 +102,7 @@ import org.telegram.messenger.BotWebViewVibrationEffect;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChannelBoostsController;
 import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.ChildSafePasswordGate;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.ContactsLoadingObserver;
 import org.telegram.messenger.DialogObject;
@@ -4914,6 +4915,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     }
                 }), ConnectionsManager.RequestFlagFailOnServerErrors);
             } else if (state == 1) {
+                Runnable childSafeImportInviteAction = () -> {
                 TLRPC.TL_messages_importChatInvite req = new TLRPC.TL_messages_importChatInvite();
                 req.hash = group;
                 ConnectionsManager.getInstance(intentAccount).sendRequest(req, (response, error) -> {
@@ -4962,6 +4964,12 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                         }
                     });
                 }, ConnectionsManager.RequestFlagFailOnServerErrors);
+            
+                };
+                if (ChildSafePasswordGate.requestJoinApprovalIfNeeded(LaunchActivity.this, childSafeImportInviteAction)) {
+                    return;
+                }
+                childSafeImportInviteAction.run();
             }
         } else if (sticker != null) {
             if (!mainFragmentsStack.isEmpty()) {

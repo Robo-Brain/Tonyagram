@@ -119,6 +119,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.ChildSafePasswordGate;
 import org.telegram.messenger.DownloadController;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.FileLoader;
@@ -5615,6 +5616,10 @@ public class ArticleViewer implements NotificationCenter.NotificationCenterDeleg
     }
 
     private void joinChannel(final BlockChannelCell cell, final TLRPC.Chat channel) {
+        if (ChildSafePasswordGate.requestJoinApprovalIfNeeded(parentActivity, () -> joinChannel(cell, channel))) {
+            return;
+        }
+
         final TLRPC.TL_channels_joinChannel req = new TLRPC.TL_channels_joinChannel();
         req.channel = MessagesController.getInputChannel(channel);
         final int currentAccount = UserConfig.selectedAccount;
